@@ -1,82 +1,52 @@
 "use strict";
-import { Context, ServiceSchema } from "moleculer";
 
-const GreeterService: ServiceSchema = {
-	name: "greeter",
+import {Service, ServiceBroker ,Context} from "moleculer";
 
-	/**
-	 * Settings
-	 */
-	settings: {
+export default class GreeterService extends Service {
 
-	},
+	public constructor(public broker: ServiceBroker) {
+		super(broker);
+		this.parseServiceSchema({
+			name:"greeter",
+			actions:{
+				/**
+				 * Say a 'Hello' action.
+				 *
+				 */
+				hello: {
+					rest: {
+						method: "GET",
+						path: "/hello",
+					},
+					async handler(): Promise<string> {
+						return this.ActionHello();
+					},
+				},
 
-	/**
-	 * Dependencies
-	 */
-	dependencies: [],
-
-	/**
-	 * Actions
-	 */
-	actions: {
-
-		/**
-		 * Say a 'Hello' action.
-		 *
-		 */
-		hello: {
-			rest: {
-				method: "GET",
-				path: "/hello",
+				/**
+				 * Welcome, a username
+				 */
+				welcome: {
+					rest: "/welcome",
+					params: {
+						name: "string",
+					},
+					async handler(ctx: Context<{name: string}>): Promise<string> {
+						return this.ActionWelcome(ctx.params.name);
+					},
+				},
 			},
-			async handler(): Promise<string> {
-				return "Hello Moleculer";
-			},
-		},
+		});
 
-		/**
-		 * Welcome, a username
-		 */
-		welcome: {
-			rest: "/welcome",
-			params: {
-				name: "string",
-			},
-			async handler(ctx: Context<{name: string}>): Promise<string> {
-				return `Welcome, ${ctx.params.name}`;
-			},
-		},
-	},
+	}
 
-	/**
-	 * Events
-	 */
-	events: {
+	// Action
+	public ActionHello(): string {
+		return "Hello Moleculer";
+	}
+	public ActionWelcome(name: string): string {
+		return `Welcome, ${name}`;
+	}
 
-	},
+}
 
-	/**
-	 * Methods
-	 */
-	methods: {
-
-	},
-
-	/**
-	 * Service created lifecycle event handler
-	 */
-	created(): void {},
-
-	/**
-	 * Service started lifecycle event handler
-	 */
-	async started(): Promise<void> {},
-
-	/**
-	 * Service stopped lifecycle event handler
-	 */
-	async stopped(): Promise<void> {},
-};
-
-export = GreeterService;

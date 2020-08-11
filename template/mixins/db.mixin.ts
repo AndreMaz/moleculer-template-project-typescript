@@ -5,26 +5,24 @@ import { sync } from "mkdirp";
 import { Context, Service, ServiceSchema } from "moleculer";
 import DbService from "moleculer-db";
 
-export default function(collection: string): Partial<ServiceSchema> & ThisType<Service> {
-	const cacheCleanEventName = `cache.clean.${collection}`;
+class Connection implements Partial<ServiceSchema>, ThisType<Service>{
 
-	const schema: Partial<ServiceSchema> & ThisType<Service> = {
+	private cacheCleanEventName: string;
+	private collection: string;
+	private schema: Partial<ServiceSchema> & ThisType<Service> = {
 		mixins: [DbService],
-
 		events: {
 			/**
 			 * Subscribe to the cache clean event. If it's triggered
 			 * clean the cache entries for this service.
 			 *
-			 * @param {Context} ctx
 			 */
-			async [cacheCleanEventName]() {
+			async [this.cacheCleanEventName]() {
 				if (this.broker.cacher) {
 					await this.broker.cacher.clean(`${this.fullName}.*`);
 				}
 			},
 		},
-
 		methods: {
 			/**
 			 * Send a cache clearing event when an entity changed.
@@ -34,17 +32,16 @@ export default function(collection: string): Partial<ServiceSchema> & ThisType<S
 			 * @param {Context} ctx
 			 */
 			async entityChanged(type: string, json: any, ctx: Context) {
-				ctx.broadcast(cacheCleanEventName);
+				await  ctx.broadcast(this.cacheCleanEventName);
 			},
 		},
-
 		async started() {
 			// Check the count of items in the DB. If it's empty,
-			// call the `seedDB` method of the service.
+			// Call the `seedDB` method of the service.
 			if (this.seedDB) {
 				const count = await this.adapter.count();
 				if (count === 0) {
-					this.logger.info(`The '${collection}' collection is empty. Seeding the collection...`);
+					this.logger.info(`The '${this.collection}' collection is empty. Seeding the collection...`);
 					await this.seedDB();
 					this.logger.info("Seeding is done. Number of records:", await this.adapter.count());
 				}
@@ -52,26 +49,43 @@ export default function(collection: string): Partial<ServiceSchema> & ThisType<S
 		},
 	};
 
-	if (process.env.MONGO_URI) {
-		// Mongo adapter
-		const MongoAdapter = require("moleculer-db-adapter-mongo");
+	public constructor(public collectionName: string) {
+		this.collection = collectionName;
+		this.cacheCleanEventName = `cache.clean.${this.collection}`;
+	}
+	public start(){
+			if (process.env.MONGO_URI) {
+				// Mongo adapter
+				const   MongoAdapter = require("moleculer-db-adapter-mongo");
 
-		schema.adapter = new MongoAdapter(process.env.MONGO_URI);
-		schema.collection = collection;
-	} else if (process.env.TEST) {
-		// NeDB memory adapter for testing
-		// @ts-ignore
-		schema.adapter = new DbService.MemoryAdapter();
-	} else {
-		// NeDB file DB adapter
+				this.schema.adapter = new MongoAdapter(process.env.MONGO_URI);
+				this.schema.collection = this.collection;
+			} else if (process.env.TEST) {
+				// NeDB memory adapter for testing
+				// @ts-ignore
+				this.schema.adapter = new DbService.MemoryAdapter();
+			} else {
+				// NeDB file DB adapter
 
-		// Create data folder
-		if (!existsSync("./data")) {
-			sync("./data");
-		}
-		// @ts-ignore
-		schema.adapter = new DbService.MemoryAdapter({ filename: `./data/${collection}.db` });
+				// Create data folder
+				if (!existsSync("./data")) {
+					sync("./data");
+				}
+				// @ts-ignore
+				this.schema.adapter = new DbService.MemoryAdapter({ filename: `./data/${this.collection}.db` });
+			}
+
+		return this.schema;
 	}
 
-	return schema;
+	public get _collection(): string {
+		return this.collection;
+	}
+
+	public set _collection(value: string) {
+		this.collection = value;
+	}
+
+
 }
+export default Connection;
